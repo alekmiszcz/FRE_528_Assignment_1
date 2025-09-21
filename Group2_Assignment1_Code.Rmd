@@ -1,0 +1,81 @@
+# Import Packages
+
+```{r}
+pacman::p_load(
+  tidyverse,
+  here,
+  ggplot2,
+  dplyr,
+  knitr,
+  purrr
+)
+```
+
+# Step 2
+
+```{r}
+# Import Dataset
+
+data0 <- read.csv(here("data_raw", "05_DATA0.csv"))
+
+data1 <- read.csv(here("data_raw", "05_DATA1.csv"))
+
+data2 <- read.csv(here("data_raw", "05_DATA2.csv"))
+```
+
+```{r}
+# Create summary statistics table for each dataset
+# Data 0
+
+data0_summary_stat <- data0 %>% 
+  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
+  imap_dfr(~ tibble(                 # Row-bind into data frame
+    Variable = .y,                   # Store column's name
+    N = sum(is.na(.x)),              # Count number of missing value
+    Mean = mean(., na.rm = TRUE),  
+    SD = sd(., na.rm = TRUE),
+    Min = min(., na.rm = TRUE),
+    Max = max(., na.rm = TRUE)
+  )) %>% 
+  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
+data0_summary_stat
+```
+```{r}
+# Data 1
+
+data1_summary_stat <- data1 %>% 
+  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
+  imap_dfr(~ tibble(                 # Row-bind into data frame
+    Variable = .y,                   # Store column's name
+    N = sum(is.na(.x)),              # Count number of missing value
+    Mean = mean(., na.rm = TRUE),  
+    SD = sd(., na.rm = TRUE),
+    Min = min(., na.rm = TRUE),
+    Max = max(., na.rm = TRUE)
+  )) %>% 
+  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
+data1_summary_stat
+```
+
+```{r}
+data2_summary_stat <- data2 %>% 
+  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
+  imap_dfr(~ tibble(                 # Row-bind into data frame
+    Variable = .y,                   # Store column's name
+    N = sum(is.na(.x)),              # Count number of missing value
+    Mean = mean(., na.rm = TRUE),  
+    SD = sd(., na.rm = TRUE),
+    Min = min(., na.rm = TRUE),
+    Max = max(., na.rm = TRUE)
+  )) %>% 
+  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
+data2_summary_stat
+```
+
+
+```{r}
+# Correlation Matrix
+
+
+```
+
