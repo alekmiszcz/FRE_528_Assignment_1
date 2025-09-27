@@ -1,3 +1,12 @@
+---
+title: "Group2_Assignment1_Code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
 # Import Packages
 
 ```{r}
@@ -7,75 +16,318 @@ pacman::p_load(
   ggplot2,
   dplyr,
   knitr,
-  purrr
+  stargazer,
+  DescTools,
+  lmtest,
+  sandwich,
+  car
 )
 ```
 
 # Step 2
+
+## Comfirm your assigned dataset and paper
 
 ```{r}
 # Import Dataset
 
 data0 <- read.csv(here("data_raw", "05_DATA0.csv"))
 
-data1 <- read.csv(here("data_raw", "05_DATA1.csv"))
-
 data2 <- read.csv(here("data_raw", "05_DATA2.csv"))
 ```
 
-```{r}
-# Create summary statistics table for each dataset
-# Data 0
+## Data origin and extension
 
-data0_summary_stat <- data0 %>% 
-  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
-  imap_dfr(~ tibble(                 # Row-bind into data frame
-    Variable = .y,                   # Store column's name
-    N = sum(is.na(.x)),              # Count number of missing value
-    Mean = mean(., na.rm = TRUE),  
-    SD = sd(., na.rm = TRUE),
-    Min = min(., na.rm = TRUE),
-    Max = max(., na.rm = TRUE)
-  )) %>% 
-  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
-data0_summary_stat
-```
 ```{r}
-# Data 1
+# Clean Dataset
 
-data1_summary_stat <- data1 %>% 
-  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
-  imap_dfr(~ tibble(                 # Row-bind into data frame
-    Variable = .y,                   # Store column's name
-    N = sum(is.na(.x)),              # Count number of missing value
-    Mean = mean(., na.rm = TRUE),  
-    SD = sd(., na.rm = TRUE),
-    Min = min(., na.rm = TRUE),
-    Max = max(., na.rm = TRUE)
-  )) %>% 
-  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
-data1_summary_stat
+merged_df <- inner_join(data0, data2, by = c("fips", "year", "kfact")) %>% 
+  # Combine data0 and data2 based on 'fips', 'year' and "kfact. 
+  # We combine based on multiple columns because we want to combine based on primary key
+  drop_na() %>% 
+  select("year", "fips", "rprofit_acre", "moist.y", "dry", "kfact", "mean_t04", "mean_t05", "mean_t06", "mean_t07", "mean_t08", "mean_t09", "mean_p04", "mean_p05", "mean_p06", "mean_p07", "mean_p08", "mean_p09") %>% # select dependent variable and independent variables from merged dataframe
+  mutate(Mean_Temperature = rowMeans(across(mean_t04 : mean_t09))) %>% # Convert Monthly Temperature to Yearly 
+  mutate(Mean_Precipitation = rowMeans(across(mean_p04 : mean_p09))) %>% # Convert Montly Precipitation to Yearly
+  select(-mean_t04 : -mean_p09) %>% # Drop useless temperature and percipitation variables
+  mutate(Temp_Dummy = if_else(Mean_Temperature >= 46.2 & Mean_Temperature <= 93.2, 1, 0)) %>% 
+  # Create Dummy variable for mean temperature.
+  # When the mean temperature is within the range, dummy variable is 1, otherwise dummy variable is 0
+  rename(Year = year, County  = fips, Profit_per_Acre = rprofit_acre, 
+        Moist = moist.y, Dry = dry, Soil_Erosion = kfact)
 ```
 
 ```{r}
-data2_summary_stat <- data2 %>% 
-  select(where(is.numeric)) %>%      # Get rid off those non-numeric attributes like chr
-  imap_dfr(~ tibble(                 # Row-bind into data frame
-    Variable = .y,                   # Store column's name
-    N = sum(is.na(.x)),              # Count number of missing value
-    Mean = mean(., na.rm = TRUE),  
-    SD = sd(., na.rm = TRUE),
-    Min = min(., na.rm = TRUE),
-    Max = max(., na.rm = TRUE)
-  )) %>% 
-  mutate(across(c(Mean, SD, Min, Max), ~round(., 2)))
-data2_summary_stat
+head(merged_df)
 ```
 
+## Correlation Analysis
 
 ```{r}
-# Correlation Matrix
+correlation_variables <- merged_df %>% 
+  select(Profit_per_Acre, Moist, Dry, Soil_Erosion, Mean_Temperature, Mean_Precipitation, Temp_Dummy)
 
+# Calculate Correlation 
+cor_analysis <- cor(correlation_variables, use = "pairwise.complete.obs")
+
+# Define variable names
+var_names <- c("Profit", "Moist", "Dry", "Erosion", "Temp", "Precip", "TempDummy")
+
+rownames(cor_analysis) <- var_names
+colnames(cor_analysis) <- var_names
+
+stargazer(cor_analysis,
+          title = "Correlation Analysis",
+          align = TRUE,
+          type = 'text',
+          rownames = TRUE,
+          colnames = TRUE,
+          header = FALSE,
+          font.size = "small"
+          )
+```
+## Scatter Plots and Outliers Check
+
+```{r}
+# Profit per Acre v.s. Moist
+
+profit_moist_scatter <- merged_df %>% 
+  ggplot(aes(x = Moist, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Moist",
+       x = "Moist",
+       y = "Profit per Acre"
+       )
+profit_moist_scatter
+```
+
+```{r}
+# Profit per Acre v.s.Dry
+
+profit_dry_scatter <- merged_df %>% 
+  ggplot(aes(x = Dry, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Dry",
+       x = "Dry",
+       y = "Profit per Acre"
+       )
+profit_dry_scatter
 
 ```
+
+```{r}
+# Profit per Acre v.s.Mean Temperature
+
+profit_temp_scatter <- merged_df %>% 
+  ggplot(aes(x = Mean_Temperature, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Mean Temperature",
+       x = "Mean Temperature (Growing Season)",
+       y = "Profit per Acre"
+       )
+profit_temp_scatter
+```
+
+```{r}
+# Profit per Acre v.s.Mean Precipitation
+
+profit_prec_scatter <- merged_df %>% 
+  ggplot(aes(x = Mean_Precipitation, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Mean Precipitation",
+       x = "Mean Precipitation",
+       y = "Profit per Acre"
+       )
+profit_prec_scatter
+```
+
+```{r}
+# Profit per Acre v.s.Temperature Dummy
+
+profit_temp_dummy_scatter <- merged_df %>% 
+  ggplot(aes(x = Temp_Dummy, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Temperature Dummy",
+       x = "Temperature Dummy",
+       y = "Profit per Acre"
+       )
+profit_temp_dummy_scatter
+```
+
+```{r}
+# Profit per Acre v.s.Soil Erosion
+
+profit_erosion_scatter <- merged_df %>% 
+  ggplot(aes(x = Soil_Erosion, y = Profit_per_Acre)) +
+  geom_point(alpha = 0.7,color = "#40BDBB") +
+  labs(title = "Scatter Plot of Profit per Acre v.s. Soil Erosion",
+       x = "Soil Erosion",
+       y = "Profit per Acre"
+       )
+profit_erosion_scatter
+```
+
+```{r}
+# Histogram of Profit per Acre
+# We have seen Profit per Acre has some outliers based on scatter plots
+# So we want to use histogram to check the distribution of Profit per Acre, so we would know which outliers handling method we should use
+
+hist_profit <- merged_df %>% 
+  ggplot(aes(x = Profit_per_Acre)) +
+  geom_histogram(bins = 50, fill = "#69b3a2", alpha=0.9) +
+  coord_cartesian(xlim = c(-500000, 500000)) +
+  labs(title = "Distribution of Profit per Acre",
+       x = "Profit per Acre",
+       y = "Count") +
+  theme_minimal() +
+  theme(
+  plot.title = element_text(size=15)
+)
+hist_profit
+```
+
+```{r}
+# Use Winsorization to handle outliers
+# The histogram shows Profit per Acre is right skewed
+
+merged_df_win <- merged_df %>% 
+  mutate(
+    Profit_per_Acre_Win = Winsorize(
+      Profit_per_Acre, 
+      val = quantile(Profit_per_Acre, probs = c(0.01, 0.9), na.rm = TRUE)
+      )
+  ) %>% 
+  select(-Profit_per_Acre)
+
+```
+
+## Summary Statistics
+
+```{r}
+vars_for_stats <- c("Profit_per_Acre_Win", "Moist", "Dry", "Soil_Erosion", 
+                    "Mean_Temperature", "Mean_Precipitation", "Temp_Dummy", "County")
+
+stargazer(merged_df_win[, vars_for_stats],
+          type = "text",
+          title = "Descriptive Statistics",
+          digits = 2
+          )
+```
+
+## Multiple Regression Models
+
+```{r}
+# Build regression models
+
+m0 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation, data = merged_df_win)
+m1 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist, data = merged_df_win)
+m2 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist + Dry, data = merged_df_win)
+m3 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist + Dry + Soil_Erosion, data = merged_df_win)
+
+```
+
+```{r}
+# Regression Table
+
+stargazer(m0, m1, m2, m3,
+          type = "text",                
+          title = "Multiple Regression Models",
+          digits = 3,                    
+          column.labels = c("Model 0", "Model 1", "Model 2", "Model 3"),
+          dep.var.labels = "Profit per Acre (Winsorized)"
+)
+```
+
+## Diagnostics and remedies
+
+```{r}
+# Check each model VIF
+
+print(vif(m0))
+print(vif(m1))
+print(vif(m2))
+print(vif(m3))
+```
+
+```{r}
+# Heteroskedasticity
+# Breusch–Pagan test
+
+print(bptest(m0))
+print(bptest(m1))
+print(bptest(m2))
+print(bptest(m3))
+
+```
+Since all of our p-values are smaller than 0.05, we need to use robust SE
+
+```{r}
+# F-test
+
+anova(m0, m1, m2, m3)
+
+```
+
+```{r}
+# RESET-test
+
+print(resettest(m0))
+print(resettest(m1))
+print(resettest(m2))
+print(resettest(m3))
+
+```
+
+```{r}
+# Residual Plot
+# m3
+
+par(mfrow=c(1,1))      # Show 4 plots together: c(2,2)
+plot(m3)               # Produces: residuals vs fitted, QQ, scale-location, residuals vs leverage plots
+
+# Residuals vs Fitted (plot 1)
+plot(m3, which = 1)
+
+# Normal Q-Q plot of residuals (plot 2)
+plot(m3, which = 2)
+
+# Scale-Location plot (plot 3)
+plot(m3, which = 3)
+
+# Residuals vs Leverage plot (plot 5)
+plot(m3, which = 5)
+
+```
+
+## Robustness check
+
+```{r}
+# Re-estimate the final full model
+
+m0r <- coeftest(m0, vcov = vcovHC(m1, type = "HC1"))
+m1r <- coeftest(m1, vcov = vcovHC(m1, type = "HC1"))
+m2r <- coeftest(m2, vcov = vcovHC(m1, type = "HC1"))
+m3r <- coeftest(m3, vcov = vcovHC(m1, type = "HC1"))
+
+```
+
+```{r}
+# Robustness Regression Table
+
+stargazer(m0, m1, m2, m3,
+          type = "text",                
+          title = "Multiple Regression Models",
+          digits = 3,                    
+          column.labels = c("Model 0", "Model 1", "Model 2", "Model 3"),
+          dep.var.labels = "Profit per Acre (Winsorized)"
+)
+```
+
+
+
+
+# Crate scatter plots for all chosen variables (dependent variable v.s. independent variables)
+
+
+
+
 
