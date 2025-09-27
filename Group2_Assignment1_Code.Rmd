@@ -303,17 +303,17 @@ plot(m3, which = 5)
 ```{r}
 # Re-estimate the final full model
 
-m0r <- coeftest(m0, vcov = vcovHC(m1, type = "HC1"))
+m0r <- coeftest(m0, vcov = vcovHC(m0, type = "HC1"))
 m1r <- coeftest(m1, vcov = vcovHC(m1, type = "HC1"))
-m2r <- coeftest(m2, vcov = vcovHC(m1, type = "HC1"))
-m3r <- coeftest(m3, vcov = vcovHC(m1, type = "HC1"))
+m2r <- coeftest(m2, vcov = vcovHC(m2, type = "HC1"))
+m3r <- coeftest(m3, vcov = vcovHC(m3, type = "HC1"))
 
 ```
 
 ```{r}
 # Robustness Regression Table
 
-stargazer(m0, m1, m2, m3,
+stargazer(m0r, m1r, m2r, m3r,
           type = "text",                
           title = "Multiple Regression Models",
           digits = 3,                    
