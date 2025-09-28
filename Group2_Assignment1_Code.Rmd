@@ -47,8 +47,8 @@ merged_df <- inner_join(data0, data2, by = c("fips", "year", "kfact")) %>%
   drop_na() %>% 
   select("year", "fips", "rprofit_acre", "moist.y", "dry", "kfact", "mean_t04", "mean_t05", "mean_t06", "mean_t07", "mean_t08", "mean_t09", "mean_p04", "mean_p05", "mean_p06", "mean_p07", "mean_p08", "mean_p09") %>% # select dependent variable and independent variables from merged dataframe
   mutate(Mean_Temperature = rowMeans(across(mean_t04 : mean_t09))) %>% # Convert Monthly Temperature to Yearly 
-  mutate(Mean_Precipitation = rowMeans(across(mean_p04 : mean_p09))) %>% # Convert Montly Precipitation to Yearly
-  select(-mean_t04 : -mean_p09) %>% # Drop useless temperature and percipitation variables
+  mutate(Mean_Precipitation = rowMeans(across(mean_p04 : mean_p09))) %>% # Convert Monthly Precipitation to Yearly
+  select(-mean_t04 : -mean_p09) %>% # Drop unwanted temperature and percipitation variables
   mutate(Temp_Dummy = if_else(Mean_Temperature >= 46.2 & Mean_Temperature <= 93.2, 1, 0)) %>% 
   # Create Dummy variable for mean temperature.
   # When the mean temperature is within the range, dummy variable is 1, otherwise dummy variable is 0
@@ -63,6 +63,7 @@ head(merged_df)
 ## Correlation Analysis
 
 ```{r}
+# Select specific variables for correlation calculation
 correlation_variables <- merged_df %>% 
   select(Profit_per_Acre, Moist, Dry, Soil_Erosion, Mean_Temperature, Mean_Precipitation, Temp_Dummy)
 
@@ -72,9 +73,11 @@ cor_analysis <- cor(correlation_variables, use = "pairwise.complete.obs")
 # Define variable names
 var_names <- c("Profit", "Moist", "Dry", "Erosion", "Temp", "Precip", "TempDummy")
 
+# Create column and row names for correlation analysis table
 rownames(cor_analysis) <- var_names
 colnames(cor_analysis) <- var_names
 
+# Create correlation analysis table
 stargazer(cor_analysis,
           title = "Correlation Analysis",
           align = TRUE,
@@ -193,7 +196,7 @@ merged_df_win <- merged_df %>%
   mutate(
     Profit_per_Acre_Win = Winsorize(
       Profit_per_Acre, 
-      val = quantile(Profit_per_Acre, probs = c(0.01, 0.9), na.rm = TRUE)
+      val = quantile(Profit_per_Acre, probs = c(0.01, 0.9), na.rm = TRUE) # Get 1st and 90th percentiles for outlier handling
       )
   ) %>% 
   select(-Profit_per_Acre)
@@ -203,8 +206,12 @@ merged_df_win <- merged_df %>%
 ## Summary Statistics
 
 ```{r}
+# Define the set of variables to be used in our statistics table
+
 vars_for_stats <- c("Profit_per_Acre_Win", "Moist", "Dry", "Soil_Erosion", 
                     "Mean_Temperature", "Mean_Precipitation", "Temp_Dummy", "County")
+
+# Create statistics table
 
 stargazer(merged_df_win[, vars_for_stats],
           type = "text",
@@ -218,10 +225,10 @@ stargazer(merged_df_win[, vars_for_stats],
 ```{r}
 # Build regression models
 
-m0 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation, data = merged_df_win)
-m1 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist, data = merged_df_win)
-m2 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist + Dry, data = merged_df_win)
-m3 <- lm(Profit_per_Acre_Win ~ Mean_Temperature + Mean_Precipitation + Moist + Dry + Soil_Erosion, data = merged_df_win)
+m0 <- lm(Profit_per_Acre_Win ~ Mean_Temperature : Temp_Dummy + Mean_Precipitation, data = merged_df_win)
+m1 <- lm(Profit_per_Acre_Win ~ Mean_Temperature : Temp_Dummy + Mean_Precipitation + Moist, data = merged_df_win)
+m2 <- lm(Profit_per_Acre_Win ~ Mean_Temperature : Temp_Dummy + Mean_Precipitation + Moist + Dry, data = merged_df_win)
+m3 <- lm(Profit_per_Acre_Win ~ Mean_Temperature : Temp_Dummy + Mean_Precipitation + Moist + Dry + Soil_Erosion, data = merged_df_win)
 
 ```
 
@@ -279,10 +286,8 @@ print(resettest(m3))
 
 ```{r}
 # Residual Plot
-# m3
 
-par(mfrow=c(1,1))      # Show 4 plots together: c(2,2)
-plot(m3)               # Produces: residuals vs fitted, QQ, scale-location, residuals vs leverage plots
+# Produces: residuals vs fitted, QQ, scale-location, residuals vs leverage plots
 
 # Residuals vs Fitted (plot 1)
 plot(m3, which = 1)
@@ -321,13 +326,3 @@ stargazer(m0r, m1r, m2r, m3r,
           dep.var.labels = "Profit per Acre (Winsorized)"
 )
 ```
-
-
-
-
-# Crate scatter plots for all chosen variables (dependent variable v.s. independent variables)
-
-
-
-
-
